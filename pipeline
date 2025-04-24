@@ -1,0 +1,54 @@
+pipeline{
+    agent any
+    environment{
+        IMAGE_NAME = "java-ansible"
+        GOOGLE_APPLICATION_CREDENTIALS = credentials('gcp')
+
+    }
+    stages{
+        stage ("docker hub connection"){
+            steps{
+                withCredentials([usernamePassword(credentialsId: 'docker-hub',
+                                                  usernameVariable: 'DOCKER_USER',
+                                                  passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    '''
+            }
+        }
+    }
+    stage("Authenticate with Google Cloud") {
+            steps {
+                sh '''
+                gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                gcloud auth configure-docker us-central1-docker.pkg.dev
+                '''
+            }
+        }
+    stage ("build image"){
+        steps {
+            sh '''
+            docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+            docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ganesh6498/${IMAGE_NAME}:${BUILD_NUMBER}
+           docker push ganesh6498/${IMAGE_NAME}:${BUILD_NUMBER}
+
+            '''
+        }
+    }
+ 
+
+    stage ("ansible playbook run"){
+       steps{
+
+        sh '''
+
+        ansible-playbook docker-ansible-pipe.yml -e build_number=$BUILD_NUMBER
+        '''
+
+
+       }
+
+    }
+}
+}
+
